@@ -1,24 +1,27 @@
+version: '3'
+
 services:
   magic-platform:
     env_file:
       - .env.dev
     build:
       context: .
-    command: /app/run_app.sh mage start $PROJECT_NAME
+    command: /app/run_app.sh mage start ${PROJECT_NAME}
     ports:
       - "6789:6789"
     volumes:
-      # Mount your local codebase to the container.
-      - .:/$MAGE_CODE_PATH
-      # Store the data output on local machine to easily debug (optional).
-      - ~/.mage_data:/$MAGE_CODE_PATH/mage_data
-    restart: on-failure:5
+      - ${MAGE_CODE_PATH}:${MAGE_CODE_PATH}
+      - mage-data:${MAGE_CODE_PATH}/mage_data
+    environment:
+      - MAGE_CODE_PATH=${MAGE_CODE_PATH}
+      - PROJECT_NAME=${PROJECT_NAME}
+    restart: unless-stopped
     networks:
       - app-network
     depends_on:
       - magic-database
-    stdin_open: true # used for interactive debugging
-    tty: true # used for interactive debugging
+    stdin_open: true
+    tty: true
 
   magic-database:
     image: pgvector/pgvector:0.6.0-pg16
@@ -27,10 +30,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ~/.postgres/data:/var/lib/postgresql/data
-      # Custom database initialization scripts (optional).
+      - postgres-data:/var/lib/postgresql/data
       - ./scripts/database:/docker-entrypoint-initdb.d
-    restart: always
+    restart: unless-stopped
     networks:
       - app-network
 
@@ -39,13 +41,77 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms256m -Xmx512m"
     ports:
       - "9200:9200"
       - "9300:9300"
-    restart: always
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
     networks:
       - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  mage-data:
+  postgres-data:
+  elasticsearch-data:
+  
+# services:
+#   magic-platform:
+#     env_file:
+#       - .env.dev
+#     build:
+#       context: .
+#     command: /app/run_app.sh mage start $PROJECT_NAME
+#     ports:
+#       - "6789:6789"
+#     volumes:
+#       # Mount your local codebase to the container.
+#       - .:/$MAGE_CODE_PATH
+#       # Store the data output on local machine to easily debug (optional).
+#       - ~/.mage_data:/$MAGE_CODE_PATH/mage_data
+#     restart: on-failure:5
+#     networks:
+#       - app-network
+#     depends_on:
+#       - magic-database
+#     stdin_open: true # used for interactive debugging
+#     tty: true # used for interactive debugging
+
+#   magic-database:
+#     image: pgvector/pgvector:0.6.0-pg16
+#     env_file:
+#       - .env.dev
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       - ~/.postgres/data:/var/lib/postgresql/data
+#       # Custom database initialization scripts (optional).
+#       - ./scripts/database:/docker-entrypoint-initdb.d
+#     restart: always
+#     networks:
+#       - app-network
+
+#   elasticsearch:
+#     image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0
+#     environment:
+#       - discovery.type=single-node
+#       - xpack.security.enabled=false
+#     ports:
+#       - "9200:9200"
+#       - "9300:9300"
+#     restart: always
+#     networks:
+#       - app-network
+
+# networks:
+#   app-network:
+#     driver: bridge
